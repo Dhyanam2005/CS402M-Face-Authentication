@@ -162,8 +162,8 @@ class _AuthScreenState extends State<AuthScreen> {
         await Future.delayed(const Duration(milliseconds: 1200));
         if (mounted) Navigator.pushReplacementNamed(context, '/home');
 
-      // Professor (class index 2) — deploy ransomware
-      } else if (bestClass == 2) {
+      // Professor — deploy ransomware
+      } else if (result['isProfessor'] == true) {
         _autoScanActive = false;
         setState(() => _statusMessage =
             'Target identified: $detectedLabel ($confidence%)\nDeploying payload...');

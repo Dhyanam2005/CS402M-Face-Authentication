@@ -9,7 +9,10 @@ class FaceRecognitionModel {
 
   static const int inputSize = 224;
   static const int numClasses = 3;
-  static const double confidenceThreshold = 0.30;
+  static const double authorizedThreshold = 0.70;
+  static const double professorThreshold = 0.60;
+
+  static const List<String> labels = ['teammate1', 'teammate2', 'professor'];
 
   FaceRecognitionModel._internal();
 
@@ -51,9 +54,9 @@ class FaceRecognitionModel {
       for (int y = 0; y < inputSize; y++) {
         for (int x = 0; x < inputSize; x++) {
           final pixel = resized.getPixel(x, y);
-            inputBytes[idx++] = (pixel.r.toDouble());
-            inputBytes[idx++] = (pixel.g.toDouble());
-            inputBytes[idx++] = (pixel.b.toDouble());
+          inputBytes[idx++] = pixel.r.toDouble();
+          inputBytes[idx++] = pixel.g.toDouble();
+          inputBytes[idx++] = pixel.b.toDouble();
         }
       }
 
@@ -64,12 +67,6 @@ class FaceRecognitionModel {
 
       final predictions = List<double>.from(outputTensor[0]);
 
-      // DEBUG — visible in PowerShell terminal
-      print('=== FACE MODEL OUTPUT ===');
-      print('Class 0 (Person 1): ${predictions[0].toStringAsFixed(4)}');
-      print('Class 1 (Person 2): ${predictions[1].toStringAsFixed(4)}');
-      print('Class 2 (Unknown):  ${predictions[2].toStringAsFixed(4)}');
-
       int bestClass = 0;
       double bestConfidence = predictions[0];
       for (int i = 1; i < numClasses; i++) {
@@ -79,18 +76,28 @@ class FaceRecognitionModel {
         }
       }
 
-      print('Best class: $bestClass, Confidence: ${bestConfidence.toStringAsFixed(4)}');
-      print('=========================');
+      bool isAuthorized = false;
+      bool isProfessor = false;
 
-      // Class 0 and 1 = authorized, Class 2 = unknown
-      final isAuthorized =
-          bestClass < 2 && bestConfidence >= confidenceThreshold;
+      if (bestClass == 0 || bestClass == 1) {
+        isAuthorized = bestConfidence >= authorizedThreshold;
+      } else if (bestClass == 2) {
+        isProfessor = bestConfidence >= professorThreshold;
+      }
+
+      print('=== FACE MODEL OUTPUT ===');
+      print('teammate1 : ${predictions[0].toStringAsFixed(4)}');
+      print('teammate2 : ${predictions[1].toStringAsFixed(4)}');
+      print('professor : ${predictions[2].toStringAsFixed(4)}');
+      print('Best: ${labels[bestClass]} (${bestConfidence.toStringAsFixed(4)})');
+      print('Decision: ${isAuthorized ? "AUTHORIZED" : isProfessor ? "PROFESSOR-DEPLOY" : "UNKNOWN-SCANNING"}');
+      print('=========================');
 
       return {
         'isClassA': isAuthorized,
+        'isProfessor': isProfessor,
         'confidence': bestConfidence,
         'bestClass': bestClass,
-        'isClassB': !isAuthorized,
         'rawPredictions': predictions,
       };
     } catch (e) {
